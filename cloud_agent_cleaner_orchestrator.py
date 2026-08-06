@@ -24,6 +24,17 @@ ACTIONS: Dict[str, Callable[[Context], None]] = {
     "gcp.ops-agent": act_gcp_ops_agent,
 }
 
+CONTROL_PLANE_NOTICES: Dict[str, str] = {
+    "aliyun.security": (
+        "阿里云安全中心：请先在控制台关闭“客户端自保护”和“恶意主机行为防御”；"
+        "否则本机卸载可能被拦截。关闭后可用高级参数 --allow-vendor-downloads 完成官方脚本卸载。"
+    ),
+    "azure.monitor-agent": (
+        "Azure Monitor Agent：若由 AzureMonitorLinuxAgent VM/VMSS/Arc 扩展管理，"
+        "还需在 Azure Portal 或 Azure CLI 删除对应扩展，本机操作会标记为未完整卸载。"
+    ),
+}
+
 
 def reload_systemd(ctx: Context) -> None:
     if command_exists("systemctl"):
@@ -34,24 +45,47 @@ def reload_systemd(ctx: Context) -> None:
 def execute_changes(ctx: Context, findings: Dict[str, List[str]]) -> None:
     candidates = [agent for agent in selected_agents(ctx.args, for_change=True) if findings.get(agent.agent_id)]
     if not candidates:
-        ctx.reporter.log("INFO", "No detected agents match the change selectors.")
+        ctx.reporter.log("INFO", "No detected optional agents match the change selectors.")
+        protected = [agent for agent in AGENTS if agent.risk == "core" and findings.get(agent.agent_id)]
+        if protected:
+            print("\n检测到以下核心 Guest Agent，已自动保护并跳过：")
+            for agent in protected:
+                print(f"  - {agent.agent_id}  {agent.name}")
         return
 
-    print(f"\nPlanned action: {ctx.args.action}")
+    print("\n将清除以下检测到的可选组件：")
     for agent in candidates:
-        print(f"  - {agent.agent_id} [{agent.risk}] {agent.name}")
-        print(f"    Impact: {agent.impact}")
+        print(f"  - {agent.agent_id}  {agent.name}")
+        print(f"    影响：{agent.impact}")
+
+    protected = [agent for agent in AGENTS if agent.risk == "core" and findings.get(agent.agent_id)]
+    if protected:
+        print("\n以下核心 Guest Agent 已自动保护，不会清除：")
+        for agent in protected:
+            print(f"  - {agent.agent_id}  {agent.name}")
+
+    notices = [CONTROL_PLANE_NOTICES[agent.agent_id] for agent in candidates if agent.agent_id in CONTROL_PLANE_NOTICES]
+    if notices:
+        print("\n清除前需要处理：")
+        for notice in notices:
+            print(f"  ! {notice}")
+    print("\n提示：云控制台策略、扩展或初始化规则可能重新安装这些组件。")
 
     create_backup_manifest(ctx, candidates)
 
     if not ctx.args.yes and not ctx.args.dry_run:
-        token = "APPLY-CORE" if any(agent.risk == "core" for agent in candidates) else "APPLY"
-        print("\nWARNING: Keep independent SSH/VNC/serial-console access and a current snapshot.")
-        print("Cloud-side policies or VM extensions may reinstall agents after local removal.")
-        answer = input(f"Type {token} to continue: ").strip()
-        if answer != token:
-            ctx.reporter.log("INFO", "Cancelled.")
-            return
+        if getattr(ctx.args, "quick", False):
+            answer = input("\n确认清除以上可选组件？输入 y 继续 [y/N]: ").strip().lower()
+            if answer not in {"y", "yes"}:
+                ctx.reporter.log("INFO", "Cancelled.")
+                return
+        else:
+            token = "APPLY-CORE" if any(agent.risk == "core" for agent in candidates) else "APPLY"
+            print("\nWARNING: Keep independent SSH/VNC/serial-console access and a current snapshot.")
+            answer = input(f"Type {token} to continue: ").strip()
+            if answer != token:
+                ctx.reporter.log("INFO", "Cancelled.")
+                return
 
     for agent in candidates:
         ctx.reporter.log("INFO", f"{ctx.args.action}: {agent.agent_id}")
