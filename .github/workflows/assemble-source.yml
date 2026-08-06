@@ -15,17 +15,28 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Wait for all source parts
+      - name: Check required source parts
         id: parts
         shell: bash
         run: |
-          count=$(find .source-parts -maxdepth 1 -type f -name 'part*.b64' 2>/dev/null | wc -l | tr -d ' ')
-          echo "count=$count" >> "$GITHUB_OUTPUT"
-          if [ "$count" -ne 5 ]; then
-            echo "Waiting for 5 source parts; currently have $count."
-          fi
+          required=(
+            .source-parts/part00.b64
+            .source-parts/part01.b64
+            .source-parts/part02.b64
+            .source-parts/part03a.b64
+            .source-parts/part03b.b64
+            .source-parts/part04.b64
+          )
+          ready=true
+          for path in "${required[@]}"; do
+            if [ ! -f "$path" ]; then
+              echo "Missing $path"
+              ready=false
+            fi
+          done
+          echo "ready=$ready" >> "$GITHUB_OUTPUT"
       - name: Assemble, verify and test
-        if: steps.parts.outputs.count == '5'
+        if: steps.parts.outputs.ready == 'true'
         shell: bash
         run: |
           python3 - <<'PY'
@@ -33,9 +44,10 @@ jobs:
           import hashlib
           from pathlib import Path
 
+          names = ('part00', 'part01', 'part02', 'part03a', 'part03b', 'part04')
           encoded = ''.join(
-              Path(f'.source-parts/part{index:02d}.b64').read_text(encoding='ascii')
-              for index in range(5)
+              Path(f'.source-parts/{name}.b64').read_text(encoding='ascii')
+              for name in names
           )
           data = base64.b64decode(encoded, validate=True)
           digest = hashlib.sha256(data).hexdigest()
@@ -48,7 +60,7 @@ jobs:
           python3 -m py_compile cloud_agent_cleaner.py
           python3 -m unittest -v tests/smoke.py
       - name: Commit assembled source and remove staging files
-        if: steps.parts.outputs.count == '5'
+        if: steps.parts.outputs.ready == 'true'
         shell: bash
         run: |
           rm -rf .source-parts
