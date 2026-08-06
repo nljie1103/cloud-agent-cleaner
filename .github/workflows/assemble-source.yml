@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   assemble:
-    runs-on: ubuntu-24.04-arm
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
         with:
@@ -19,7 +19,7 @@ jobs:
         id: parts
         shell: bash
         run: |
-          count=$(find .source-parts -maxdepth 1 -type f -name 'part*.b64' 2>/dev/null | wc -l)
+          count=$(find .source-parts -maxdepth 1 -type f -name 'part*.b64' 2>/dev/null | wc -l | tr -d ' ')
           echo "count=$count" >> "$GITHUB_OUTPUT"
           if [ "$count" -ne 5 ]; then
             echo "Waiting for 5 source parts; currently have $count."
@@ -28,13 +28,23 @@ jobs:
         if: steps.parts.outputs.count == '5'
         shell: bash
         run: |
-          cat .source-parts/part00.b64 \
-              .source-parts/part01.b64 \
-              .source-parts/part02.b64 \
-              .source-parts/part03.b64 \
-              .source-parts/part04.b64 \
-            | base64 --decode > cloud_agent_cleaner.py
-          echo '1feaf6ac344723a7c716bb76c865ee3eecb9d4955a650919df4fa7962a7f5b56  cloud_agent_cleaner.py' | sha256sum --check
+          python3 - <<'PY'
+          import base64
+          import hashlib
+          from pathlib import Path
+
+          encoded = ''.join(
+              Path(f'.source-parts/part{index:02d}.b64').read_text(encoding='ascii')
+              for index in range(5)
+          )
+          data = base64.b64decode(encoded, validate=True)
+          digest = hashlib.sha256(data).hexdigest()
+          expected = '1feaf6ac344723a7c716bb76c865ee3eecb9d4955a650919df4fa7962a7f5b56'
+          if digest != expected:
+              raise SystemExit(f'SHA-256 mismatch: expected {expected}, received {digest}')
+          Path('cloud_agent_cleaner.py').write_bytes(data)
+          print(f'cloud_agent_cleaner.py: {digest}')
+          PY
           python3 -m py_compile cloud_agent_cleaner.py
           python3 -m unittest -v tests/smoke.py
       - name: Commit assembled source and remove staging files
