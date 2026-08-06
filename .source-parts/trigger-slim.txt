@@ -1,0 +1,1 @@
+Run the verified source assembly on the lightweight GitHub-hosted runner.
