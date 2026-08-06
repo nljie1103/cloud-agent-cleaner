@@ -2,9 +2,6 @@ name: tests
 
 on:
   push:
-    paths-ignore:
-      - '.source-parts/**'
-      - '.github/workflows/assemble-source.yml'
   pull_request:
 
 concurrency:
@@ -16,7 +13,6 @@ permissions:
 
 jobs:
   smoke:
-    if: ${{ github.event_name == 'pull_request' || github.actor == 'github-actions[bot]' }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -28,7 +24,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: Compile
-        run: python -m py_compile cloud_agent_cleaner.py
+        run: python -m py_compile cloud_agent_cleaner*.py
       - name: Test
         run: python -m unittest -v tests/smoke.py
       - name: Audit smoke test
