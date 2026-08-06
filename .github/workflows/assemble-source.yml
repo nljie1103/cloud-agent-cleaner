@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   assemble:
-    runs-on: windows-latest
+    runs-on: ubuntu-slim
     steps:
       - uses: actions/checkout@v4
         with:
@@ -20,29 +20,29 @@ jobs:
           python-version: '3.11'
       - name: Check required source parts
         id: parts
-        shell: pwsh
+        shell: bash
         run: |
-          $required = @(
-            '.source-parts/part00.b64',
-            '.source-parts/part01.b64',
-            '.source-parts/part02.b64',
-            '.source-parts/part03a.b64',
-            '.source-parts/part03b.b64',
-            '.source-parts/part04.b64'
+          required=(
+            .source-parts/part00.b64
+            .source-parts/part01.b64
+            .source-parts/part02.b64
+            .source-parts/part03a.b64
+            .source-parts/part03b.b64
+            .source-parts/part04.b64
           )
-          $ready = $true
-          foreach ($path in $required) {
-            if (-not (Test-Path $path -PathType Leaf)) {
-              Write-Host "Missing $path"
-              $ready = $false
-            }
-          }
-          "ready=$($ready.ToString().ToLowerInvariant())" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          ready=true
+          for path in "${required[@]}"; do
+            if [ ! -f "$path" ]; then
+              echo "Missing $path"
+              ready=false
+            fi
+          done
+          echo "ready=$ready" >> "$GITHUB_OUTPUT"
       - name: Assemble, verify and test
         if: steps.parts.outputs.ready == 'true'
-        shell: pwsh
+        shell: bash
         run: |
-          @'
+          python3 - <<'PY'
           import base64
           import hashlib
           from pathlib import Path
@@ -59,15 +59,15 @@ jobs:
               raise SystemExit(f'SHA-256 mismatch: expected {expected}, received {digest}')
           Path('cloud_agent_cleaner.py').write_bytes(data)
           print(f'cloud_agent_cleaner.py: {digest}')
-          '@ | python -
-          python -m py_compile cloud_agent_cleaner.py
-          python -m unittest -v tests/smoke.py
+          PY
+          python3 -m py_compile cloud_agent_cleaner.py
+          python3 -m unittest -v tests/smoke.py
       - name: Commit assembled source and remove staging files
         if: steps.parts.outputs.ready == 'true'
-        shell: pwsh
+        shell: bash
         run: |
-          Remove-Item '.source-parts' -Recurse -Force
-          Remove-Item '.github/workflows/assemble-source.yml' -Force
+          rm -rf .source-parts
+          rm -f .github/workflows/assemble-source.yml
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -A
