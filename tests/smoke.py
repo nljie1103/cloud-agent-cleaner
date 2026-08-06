@@ -5,6 +5,8 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import cloud_agent_cleaner_actions_cloud1 as actions_cloud1
+import cloud_agent_cleaner_actions_cloud2 as actions_cloud2
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
@@ -75,18 +77,18 @@ class PlatformRegressionTests(unittest.TestCase):
             ctx = self.make_ctx(tmp)
             binary = Path(tmp) / "CmsGoAgent.linux-amd64"
             binary.write_text("fake", encoding="utf-8")
-            with mock.patch.object(module, "aliyun_go_agent_binaries", return_value=[binary]), \
-                 mock.patch.object(module, "stop_disable_unit"), \
-                 mock.patch.object(module, "run_local_script", return_value=False), \
-                 mock.patch.object(module, "safe_rmtree"), \
+            with mock.patch.object(actions_cloud1, "aliyun_go_agent_binaries", return_value=[binary]), \
+                 mock.patch.object(actions_cloud1, "stop_disable_unit"), \
+                 mock.patch.object(actions_cloud1, "run_local_script", return_value=False), \
+                 mock.patch.object(actions_cloud1, "safe_rmtree"), \
                  mock.patch.object(ctx.runner, "run", return_value=subprocess.CompletedProcess([], 0)) as run_mock:
-                module.act_aliyun_monitor(ctx)
+                actions_cloud1.act_aliyun_monitor(ctx)
             commands = [call.args[0] for call in run_mock.call_args_list]
             self.assertIn([str(binary), "stop"], commands)
             self.assertIn([str(binary), "uninstall"], commands)
 
     def test_tencent_tat_uses_documented_github_url(self) -> None:
-        source = SCRIPT.read_text(encoding="utf-8")
+        source = (ROOT / "cloud_agent_cleaner_actions_cloud1.py").read_text(encoding="utf-8")
         self.assertIn(
             "https://raw.githubusercontent.com/Tencent/tat-agent/main/install/uninstall.sh",
             source,
@@ -98,10 +100,10 @@ class PlatformRegressionTests(unittest.TestCase):
             ctx = self.make_ctx(tmp)
             extension = Path(tmp) / "Microsoft.Azure.Monitor.AzureMonitorLinuxAgent-1.0"
             extension.mkdir()
-            with mock.patch.object(module, "azure_monitor_extension_paths", return_value=[extension]), \
-                 mock.patch.object(module, "stop_disable_unit"), \
-                 mock.patch.object(module, "remove_package") as remove_package:
-                module.act_azure_monitor(ctx)
+            with mock.patch.object(actions_cloud2, "azure_monitor_extension_paths", return_value=[extension]), \
+                 mock.patch.object(actions_cloud2, "stop_disable_unit"), \
+                 mock.patch.object(actions_cloud2, "remove_package") as remove_package:
+                actions_cloud2.act_azure_monitor(ctx)
             self.assertIn("azure.monitor-agent", ctx.incomplete)
             remove_package.assert_not_called()
 
@@ -112,7 +114,7 @@ class PlatformRegressionTests(unittest.TestCase):
             "google-guest-compat-manager.service",
         }
         self.assertTrue(expected.issubset(set(module.RUNNING_UNITS["gcp.guest-agent"])))
-        source = SCRIPT.read_text(encoding="utf-8")
+        source = (ROOT / "cloud_agent_cleaner_detection.py").read_text(encoding="utf-8")
         self.assertIn("/usr/bin/ggactl_plugin", source)
 
 
@@ -172,7 +174,10 @@ class CLITests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout)
 
     def test_source_has_no_unsafe_shell_execution(self) -> None:
-        source = SCRIPT.read_text(encoding="utf-8")
+        source = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in ROOT.glob("cloud_agent_cleaner*.py")
+        )
         forbidden = ("shell=True", "os.system(", "eval(", "exec(", "http://")
         for text in forbidden:
             self.assertNotIn(text, source)
