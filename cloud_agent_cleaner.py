@@ -124,11 +124,14 @@ def validate_args(parser: argparse.ArgumentParser, args: argparse.Namespace) -> 
 
     if args.list_agents:
         return
-    if args.quick or (not args.action and not args.all):
+    has_selector = bool(args.providers or args.categories or args.agent_ids)
+    if args.quick or (not args.action and not args.all and not has_selector):
         args.quick = True
         args.action = "remove"
         args.providers = ["all"]
         args.categories = ["all"]
+    elif not args.action and has_selector:
+        args.action = "remove"
     if args.all:
         args.action = "remove"
         args.providers = ["all"]
