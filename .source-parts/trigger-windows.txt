@@ -1,1 +1,0 @@
-Run the final verified source assembly on the Windows GitHub-hosted runner.
