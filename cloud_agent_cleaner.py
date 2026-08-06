@@ -19,11 +19,10 @@ def build_parser() -> argparse.ArgumentParser:
         epilog=textwrap.dedent(
             """
             Examples:
+              sudo python3 cloud_agent_cleaner.py
               sudo python3 cloud_agent_cleaner.py --audit
-              sudo python3 cloud_agent_cleaner.py --audit --provider aws,oracle
               sudo python3 cloud_agent_cleaner.py --all --dry-run
               sudo python3 cloud_agent_cleaner.py --remove --agent aws.ssm,aws.cloudwatch
-              sudo python3 cloud_agent_cleaner.py --remove --agent oracle.cloud-agent --include-core
             """
         ),
     )
@@ -32,6 +31,7 @@ def build_parser() -> argparse.ArgumentParser:
     action.add_argument("--disable", action="store_const", dest="action", const="disable", help="Stop and disable selected agents")
     action.add_argument("--remove", action="store_const", dest="action", const="remove", help="Uninstall selected agents")
     action.add_argument("--all", action="store_true", help="Remove all detected optional agents; core agents remain protected")
+    action.add_argument("--quick", action="store_true", help="Auto-detect and interactively remove detected optional agents")
     action.add_argument("--list-agents", action="store_true", help="Show the built-in agent registry")
 
     parser.add_argument("--provider", action="append", help="Comma-separated providers: aliyun,tencent,aws,oracle,azure,gcp,all")
@@ -81,12 +81,17 @@ def validate_args(parser: argparse.ArgumentParser, args: argparse.Namespace) -> 
 
     if args.list_agents:
         return
+    if args.quick or (not args.action and not args.all):
+        args.quick = True
+        args.action = "remove"
+        args.providers = ["all"]
+        args.categories = ["all"]
     if args.all:
         args.action = "remove"
         args.providers = ["all"]
         args.categories = ["all"]
     if not args.action:
-        parser.error("choose --audit, --disable, --remove, --all, or --list-agents")
+        parser.error("choose --audit, --disable, --remove, --all, --quick, or --list-agents")
 
     if args.action in ("disable", "remove"):
         if not args.providers and not args.categories and not args.agent_ids:
