@@ -27,7 +27,7 @@ ACTIONS: Dict[str, Callable[[Context], None]] = {
 CONTROL_PLANE_NOTICES: Dict[str, str] = {
     "aliyun.security": (
         "阿里云安全中心：请先在控制台关闭“客户端自保护”和“恶意主机行为防御”；"
-        "否则本机卸载可能被拦截。输入 y 后程序会下载阿里云官方 HTTPS 卸载脚本并记录 SHA-256。"
+        "否则本机卸载可能被拦截。若客户端仍在运行，输入 y 后程序会下载阿里云官方 HTTPS 卸载脚本并记录 SHA-256；若只剩静态目录则直接安全清理。"
     ),
     "tencent.tat": (
         "腾讯云 TAT：若服务器内没有本地卸载脚本，输入 y 后程序会从腾讯官方 GitHub 下载卸载脚本并记录 SHA-256。"
