@@ -8,6 +8,7 @@
 支持阿里云、腾讯云、AWS、Oracle Cloud、Microsoft Azure 与 Google Cloud
 
 [![Version](https://img.shields.io/badge/version-2.0.1--alpha.1-orange)](CHANGELOG.md)
+[![Tests](https://github.com/nljie1103/cloud-agent-cleaner/actions/workflows/test.yml/badge.svg)](https://github.com/nljie1103/cloud-agent-cleaner/actions/workflows/test.yml)
 [![Python](https://img.shields.io/badge/Python-3.8%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Platforms](https://img.shields.io/badge/clouds-6-blue)](#支持范围)
