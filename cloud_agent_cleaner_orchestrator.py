@@ -52,38 +52,43 @@ AEGIS_PROCESS_PATTERN = (
 )
 
 
-def cleanup_inactive_aegis_residuals(ctx: Context) -> None:
-    """Remove the exact Aegis home only after all known Aegis activity is gone."""
-    home = Path("/usr/local/aegis")
-    if not home.exists():
-        return
-
+def current_aegis_activity() -> List[str]:
     active = active_agent_evidence("aliyun.security")
     if process_matches(AEGIS_PROCESS_PATTERN):
         active.append("matching-current-aegis-process")
+    return sorted(set(active))
 
+
+def cleanup_inactive_aegis_residuals(ctx: Context) -> bool:
+    """Remove the exact Aegis home only after all known Aegis activity is gone."""
+    home = Path("/usr/local/aegis")
+    if not home.exists():
+        return True
+
+    active = current_aegis_activity()
     if active:
         ctx.reporter.log(
             "WARN",
             "aliyun.security still has active service/process evidence; "
-            "refusing residual directory cleanup: " + "; ".join(sorted(set(active))),
+            "refusing residual directory cleanup: " + "; ".join(active),
         )
-        return
+        return False
 
     if home.is_symlink() or not home.is_dir():
         ctx.reporter.log(
             "ERROR",
             f"Refusing to recursively remove unexpected Aegis path type: {home}",
         )
-        return
+        return False
 
     try:
         shutil.rmtree(home)
     except OSError as exc:
         ctx.reporter.log("ERROR", f"Could not remove inactive Aegis residual directory {home}: {exc}")
-        return
+        return False
 
     ctx.reporter.log("OK", f"Removed inactive Aegis residual directory: {home}")
+    return True
 
 
 def execute_changes(ctx: Context, findings: Dict[str, List[str]]) -> None:
@@ -133,6 +138,20 @@ def execute_changes(ctx: Context, findings: Dict[str, List[str]]) -> None:
 
     for agent in candidates:
         ctx.reporter.log("INFO", f"{ctx.args.action}: {agent.agent_id}")
+
+        # The official Aegis uninstaller can leave a large, inactive
+        # /usr/local/aegis tree. On a later run, clean that exact directory
+        # directly instead of downloading and executing the uninstaller again.
+        if (
+            agent.agent_id == "aliyun.security"
+            and ctx.args.action == "remove"
+            and Path("/usr/local/aegis").exists()
+            and not current_aegis_activity()
+        ):
+            cleanup_inactive_aegis_residuals(ctx)
+            reload_systemd(ctx)
+            continue
+
         action = ACTIONS.get(agent.agent_id)
         if action is None:
             ctx.reporter.log("ERROR", f"No action implementation for {agent.agent_id}.")
