@@ -5,12 +5,16 @@ on:
     paths:
       - '.source-parts/**'
 
+concurrency:
+  group: assemble-source
+  cancel-in-progress: true
+
 permissions:
   contents: write
 
 jobs:
   assemble:
-    runs-on: macos-15
+    runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v4
         with:
