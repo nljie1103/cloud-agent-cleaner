@@ -47,7 +47,7 @@
 | 📦 正规卸载 | 优先调用厂商卸载器或系统包管理器 |
 | 🔐 下载防护 | 禁止 `curl \| bash`，远程脚本需显式许可和哈希确认 |
 | 🧾 可追溯 | 生成日志、主机清单和卸载后复查结果 |
-| 🐍 零第三方依赖 | 单文件 Python 工具，仅使用标准库 |
+| 🐍 零第三方依赖 | 模块化 Python 源码，仅使用标准库，入口命令保持单一 |
 
 ## 支持范围
 
@@ -128,6 +128,21 @@ sudo python3 cloud_agent_cleaner.py \
   --disable \
   --category monitoring
 ```
+
+## 源码结构
+
+```text
+cloud_agent_cleaner.py                  # CLI 入口
+cloud_agent_cleaner_common.py           # 数据模型与系统检查
+cloud_agent_cleaner_detection.py        # Agent 检测与审计
+cloud_agent_cleaner_change.py           # 安全变更与下载辅助
+cloud_agent_cleaner_actions_cloud1.py   # 阿里云、腾讯云、AWS
+cloud_agent_cleaner_actions_cloud2.py   # OCI、Azure、GCP
+cloud_agent_cleaner_orchestrator.py     # 动作注册与结果复核
+tests/smoke.py                          # 非破坏性回归测试
+```
+
+这种拆分让厂商识别规则、卸载动作与 CLI 相互独立，更便于逐项审查和贡献；用户仍只需运行 `cloud_agent_cleaner.py`。
 
 ## ⚠️ 生产环境执行前
 
