@@ -1,1 +1,0 @@
-Assemble the verified source from the latest main branch and clean staging files.
