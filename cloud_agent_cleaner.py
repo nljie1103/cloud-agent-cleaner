@@ -1,12 +1,55 @@
 #!/usr/bin/env python3
 """Cross-cloud Linux agent audit and control CLI."""
 
+import hashlib
+import ssl
+import urllib.request
+
+import cloud_agent_cleaner_actions_cloud1 as cloud1_actions
+
 from cloud_agent_cleaner_common import *
 from cloud_agent_cleaner_detection import *
 from cloud_agent_cleaner_change import *
 from cloud_agent_cleaner_actions_cloud1 import *
 from cloud_agent_cleaner_actions_cloud2 import *
 from cloud_agent_cleaner_orchestrator import *
+
+
+_ORIGINAL_VENDOR_DOWNLOADER = cloud1_actions.download_vendor_script
+
+
+def quick_download_vendor_script(ctx: Context, url: str, label: str, agent_id: str) -> Optional[Path]:
+    """Download an official vendor uninstaller after the quick-mode global y confirmation."""
+    if not getattr(ctx.args, "quick", False):
+        return _ORIGINAL_VENDOR_DOWNLOADER(ctx, url, label, agent_id)
+    if not url.lower().startswith("https://"):
+        ctx.reporter.log("ERROR", f"Refusing non-HTTPS vendor URL: {url}")
+        return None
+
+    destination = ctx.temp_dir / f"vendor-{hashlib.sha256(url.encode()).hexdigest()[:12]}.sh"
+    if ctx.runner.dry_run:
+        ctx.reporter.log("INFO", f"DRY-RUN download {label} from {url} to {destination}")
+        return destination
+
+    request = urllib.request.Request(url, headers={"User-Agent": f"{PROJECT}/{VERSION}"})
+    try:
+        with urllib.request.urlopen(request, timeout=120, context=ssl.create_default_context()) as response:
+            data = response.read(5 * 1024 * 1024 + 1)
+    except Exception as exc:
+        ctx.reporter.log("ERROR", f"Could not download {label}: {exc}")
+        return None
+
+    if not data or len(data) > 5 * 1024 * 1024 or b"\x00" in data:
+        ctx.reporter.log("ERROR", f"Downloaded {label} is empty, too large, or not a text script.")
+        return None
+    destination.write_bytes(data)
+    destination.chmod(0o600)
+    digest = hashlib.sha256(data).hexdigest()
+    ctx.reporter.log("INFO", f"{label} source: {url}")
+    ctx.reporter.log("INFO", f"{label} SHA-256: {digest}")
+    ctx.reporter.log("WARN", "Quick mode authorized this official HTTPS uninstaller with the earlier y confirmation.")
+    return destination
+
 
 # ---------- CLI ----------
 
@@ -142,6 +185,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         if args.action == "audit":
             ctx.reporter.log("OK", "Audit completed; no changes were made.")
         else:
+            if getattr(args, "quick", False):
+                cloud1_actions.download_vendor_script = quick_download_vendor_script
             execute_changes(ctx, findings)
         if ctx.reporter.failures:
             print(f"[ERROR] Completed with {ctx.reporter.failures} error(s) and {ctx.reporter.warnings} warning(s).")
