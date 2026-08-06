@@ -45,6 +45,47 @@ def reload_systemd(ctx: Context) -> None:
         ctx.runner.run(["systemctl", "reset-failed"], check=False)
 
 
+AEGIS_PROCESS_PATTERN = (
+    r"\b(AliYunDun|AliYunDunMonitor|AliYunDunUpdate|AliSecGuard|"
+    r"AlibabaSecurityAegis|AliSecCheck|AliSecureCheckAdvanced|AliDetect|"
+    r"AliNet|AliHips|AliWebGuard)\b"
+)
+
+
+def cleanup_inactive_aegis_residuals(ctx: Context) -> None:
+    """Remove the exact Aegis home only after all known Aegis activity is gone."""
+    home = Path("/usr/local/aegis")
+    if not home.exists():
+        return
+
+    active = active_agent_evidence("aliyun.security")
+    if process_matches(AEGIS_PROCESS_PATTERN):
+        active.append("matching-current-aegis-process")
+
+    if active:
+        ctx.reporter.log(
+            "WARN",
+            "aliyun.security still has active service/process evidence; "
+            "refusing residual directory cleanup: " + "; ".join(sorted(set(active))),
+        )
+        return
+
+    if home.is_symlink() or not home.is_dir():
+        ctx.reporter.log(
+            "ERROR",
+            f"Refusing to recursively remove unexpected Aegis path type: {home}",
+        )
+        return
+
+    try:
+        shutil.rmtree(home)
+    except OSError as exc:
+        ctx.reporter.log("ERROR", f"Could not remove inactive Aegis residual directory {home}: {exc}")
+        return
+
+    ctx.reporter.log("OK", f"Removed inactive Aegis residual directory: {home}")
+
+
 def execute_changes(ctx: Context, findings: Dict[str, List[str]]) -> None:
     candidates = [agent for agent in selected_agents(ctx.args, for_change=True) if findings.get(agent.agent_id)]
     if not candidates:
@@ -127,6 +168,9 @@ def execute_changes(ctx: Context, findings: Dict[str, List[str]]) -> None:
                     f"{agent.agent_id}: no active service/process evidence; files remain installed by design.",
                 )
             continue
+
+        if agent.agent_id == "aliyun.security":
+            cleanup_inactive_aegis_residuals(ctx)
 
         evidence = detect_agent(agent.agent_id)
         if evidence:
