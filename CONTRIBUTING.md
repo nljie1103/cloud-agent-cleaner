@@ -15,7 +15,7 @@ A new Agent entry should include:
 Run before opening a pull request:
 
 ```bash
-python3 -m py_compile cloud_agent_cleaner.py
+python3 -m py_compile cloud_agent_cleaner*.py
 python3 -m unittest -v tests/smoke.py
 python3 cloud_agent_cleaner.py --audit
 ```
