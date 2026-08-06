@@ -58,6 +58,19 @@ def act_aliyun_monitor(ctx: Context) -> None:
 
     if ctx.args.action == "remove":
         safe_rmtree(ctx, "/usr/local/cloudmonitor", "/opt/cloudmonitor")
+        safe_unlink(
+            ctx,
+            "/etc/systemd/system/argusagent.service",
+            "/etc/systemd/system/cloudmonitor.service",
+            "/usr/lib/systemd/system/argusagent.service",
+            "/usr/lib/systemd/system/cloudmonitor.service",
+            "/lib/systemd/system/argusagent.service",
+            "/lib/systemd/system/cloudmonitor.service",
+            "/etc/systemd/system/multi-user.target.wants/argusagent.service",
+            "/etc/systemd/system/multi-user.target.wants/cloudmonitor.service",
+            "/etc/init.d/argusagent",
+            "/etc/init.d/cloudmonitor",
+        )
 
 
 def act_aliyun_security(ctx: Context) -> None:
